@@ -1,4 +1,10 @@
 from dotenv import load_dotenv
+from openai import OpenAI
+from vanna.ZhipuAI import ZhipuAI_Chat
+from vanna.openai import OpenAI_Chat
+
+from maxcompute import connect_to_maxcompute
+
 load_dotenv()
 
 from functools import wraps
@@ -15,16 +21,20 @@ cache = MemoryCache()
 # from vanna.local import LocalContext_OpenAI
 # vn = LocalContext_OpenAI()
 
-from vanna.remote import VannaDefault
-vn = VannaDefault(model=os.environ['VANNA_MODEL'], api_key=os.environ['VANNA_API_KEY'])
+from vanna.chromadb import ChromaDB_VectorStore
 
-vn.connect_to_snowflake(
-    account=os.environ['SNOWFLAKE_ACCOUNT'],
-    username=os.environ['SNOWFLAKE_USERNAME'],
-    password=os.environ['SNOWFLAKE_PASSWORD'],
-    database=os.environ['SNOWFLAKE_DATABASE'],
-    warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
-)
+class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
+    def __init__(self, config=None):
+        ChromaDB_VectorStore.__init__(self, config=config)
+        OpenAI_Chat.__init__(self, client=OpenAI(), config=config)
+
+vn = MyVanna(config={'model': 'qwen'})
+
+vn.dialect = 'MaxCompute SQL'
+vn.language = '中文'
+
+
+connect_to_maxcompute(vn)
 
 # NO NEED TO CHANGE ANYTHING BELOW THIS LINE
 def requires_cache(fields):
@@ -65,7 +75,7 @@ def generate_sql():
         return jsonify({"type": "error", "error": "No question provided"})
 
     id = cache.generate_id(question=question)
-    sql = vn.generate_sql(question=question)
+    sql = vn.generate_sql(question=question+'.SQL Use with.')
 
     cache.set(id=id, field='question', value=question)
     cache.set(id=id, field='sql', value=sql)
